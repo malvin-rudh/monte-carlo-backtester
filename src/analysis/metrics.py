@@ -1,4 +1,9 @@
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
+
+OUTPUTS_DIR = Path(__file__).parents[2] / "outputs"
 
 
 def compute_expected_return(final_returns: np.ndarray) -> float:
@@ -36,3 +41,50 @@ def print_summary(final_returns: np.ndarray) -> None:
     print(f"  Sharpe Ratio    : {sharpe:>9.3f}")
     print(f"  VaR (95%)       : {var * 100:>8.2f}%")
     print("=" * 35)
+
+
+def plot_return_distribution(final_returns: np.ndarray) -> None:
+    """Plot a histogram of final returns with a VaR 95% line and save to outputs/return_distribution.png."""
+    var = compute_var(final_returns)
+
+    fig, ax = plt.subplots()
+    ax.hist(final_returns * 100, bins=50, edgecolor="white")
+
+    # VaR threshold marker
+    ax.axvline(var * 100, color="red", linestyle="--", label=f"VaR 95%: {var * 100:.2f}%")
+
+    ax.set_title("Monte Carlo Return Distribution")
+    ax.set_xlabel("Final Return (%)")
+    ax.set_ylabel("Frequency")
+    ax.legend()
+
+    OUTPUTS_DIR.mkdir(exist_ok=True)
+    fig.savefig(OUTPUTS_DIR / "return_distribution.png")
+    plt.close(fig)
+
+
+def plot_sample_paths(price_matrix: np.ndarray, n_sample: int = 100) -> None:
+    """Plot a fan chart of sampled price paths with a bold median line and save to outputs/sample_paths.png."""
+    rng = np.random.default_rng(42)
+
+    # randomly select n_sample row indices without replacement
+    n_sims = price_matrix.shape[0]
+    indices = rng.choice(n_sims, size=min(n_sample, n_sims), replace=False)
+
+    fig, ax = plt.subplots()
+
+    for idx in indices:
+        ax.plot(price_matrix[idx], color="steelblue", alpha=0.1, linewidth=0.8)
+
+    # median path across all simulations, not just the sample
+    median_path = np.median(price_matrix, axis=0)
+    ax.plot(median_path, color="black", linewidth=2, label="Median path")
+
+    ax.set_title("Simulated Price Paths")
+    ax.set_xlabel("Day")
+    ax.set_ylabel("Price ($)")
+    ax.legend()
+
+    OUTPUTS_DIR.mkdir(exist_ok=True)
+    fig.savefig(OUTPUTS_DIR / "sample_paths.png")
+    plt.close(fig)

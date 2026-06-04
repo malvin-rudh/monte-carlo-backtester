@@ -3,7 +3,11 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from src.analysis.metrics import print_summary
+from src.analysis.metrics import (
+    plot_return_distribution,
+    plot_sample_paths,
+    print_summary,
+)
 from src.data.fetcher import get_prices, load_from_csv, save_to_csv
 from src.simulation.resampler import bootstrap_paths, compute_returns
 from src.strategy.ma_crossover import (
@@ -44,6 +48,8 @@ def run(
 
     final_returns_array = np.array(final_returns)
     print_summary(final_returns_array)
+    plot_return_distribution(final_returns_array)
+    plot_sample_paths(price_matrix)
 
     return {
         "expected_return": float(np.mean(final_returns_array)),
