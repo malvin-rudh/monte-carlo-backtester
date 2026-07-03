@@ -25,6 +25,9 @@ def run(
     n_days: int,
     fast: int,
     slow: int,
+    bootstrap_method: str = "block",
+    block_length: int = 15,
+    cost_bps: float = 5.0,
 ) -> dict:
     """Run the full Monte Carlo backtest pipeline and return a dict of summary metrics."""
     # fetch, persist, and reload price data
@@ -34,7 +37,9 @@ def run(
 
     # build the return pool and generate simulated price paths
     returns = compute_returns(df)
-    price_matrix = bootstrap_paths(returns, n_sims, n_days)
+    price_matrix = bootstrap_paths(
+        returns, n_sims, n_days, method=bootstrap_method, block_length=block_length
+    )
 
     # run strategy on each simulated path
     final_returns = []
@@ -43,7 +48,7 @@ def run(
         prices_series = pd.Series(path)
 
         signals = compute_signals(prices_series, fast=fast, slow=slow)
-        strategy_returns = compute_strategy_returns(prices_series, signals)
+        strategy_returns = compute_strategy_returns(prices_series, signals, cost_bps=cost_bps)
         final_returns.append(compute_final_return(strategy_returns))
 
     final_returns_array = np.array(final_returns)
@@ -69,6 +74,9 @@ def main() -> None:
     parser.add_argument("--n_days", type=int, default=252)
     parser.add_argument("--fast",   type=int, default=20)
     parser.add_argument("--slow",   type=int, default=50)
+    parser.add_argument("--bootstrap_method", choices=["iid", "block"], default="block")
+    parser.add_argument("--block_length", type=int, default=15)
+    parser.add_argument("--cost_bps", type=float, default=5.0)
     args = parser.parse_args()
 
     run(
@@ -79,6 +87,9 @@ def main() -> None:
         n_days=args.n_days,
         fast=args.fast,
         slow=args.slow,
+        bootstrap_method=args.bootstrap_method,
+        block_length=args.block_length,
+        cost_bps=args.cost_bps,
     )
 
 

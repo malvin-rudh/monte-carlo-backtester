@@ -28,9 +28,57 @@ def test_bootstrap_paths():
     # use a short returns Series as the sampling pool
     returns = pd.Series([0.01, -0.01, 0.02, -0.02, 0.005])
 
-    matrix = bootstrap_paths(returns, n_sims=100, n_days=50)
+    matrix = bootstrap_paths(returns, n_sims=100, n_days=50, method="iid")
 
     assert matrix.shape == (100, 50)
     assert not np.isnan(matrix).any()
     # every path must open at exactly $100
     assert (matrix[:, 0] == 100.0).all()
+
+
+def test_block_bootstrap_paths_shape():
+    returns = _make_autocorrelated_returns()
+
+    matrix = bootstrap_paths(returns, n_sims=100, n_days=50, method="block", block_length=15)
+
+    assert matrix.shape == (100, 50)
+    assert not np.isnan(matrix).any()
+    assert (matrix[:, 0] == 100.0).all()
+
+
+def _make_autocorrelated_returns(n: int = 2000, phi: float = 0.9) -> pd.Series:
+    """Return an AR(1) daily-return Series with strong, known lag-1 autocorrelation."""
+    rng = np.random.default_rng(0)
+    shocks = rng.normal(0, 0.01, n)
+    returns = np.zeros(n)
+    for t in range(1, n):
+        returns[t] = phi * returns[t - 1] + shocks[t]
+    return pd.Series(returns)
+
+
+def _mean_lag1_autocorr(price_matrix: np.ndarray) -> float:
+    """Mean lag-1 autocorrelation of each simulated path's daily returns."""
+    path_returns = np.diff(price_matrix, axis=1) / price_matrix[:, :-1]
+    autocorrs = [
+        np.corrcoef(r[:-1], r[1:])[0, 1] for r in path_returns
+    ]
+    return float(np.mean(autocorrs))
+
+
+def test_block_bootstrap_preserves_autocorrelation():
+    # AR(1) pool: block sampling should keep the serial dependence that iid destroys
+    returns = _make_autocorrelated_returns()
+
+    iid_matrix = bootstrap_paths(returns, n_sims=200, n_days=252, method="iid")
+    block_matrix = bootstrap_paths(
+        returns, n_sims=200, n_days=252, method="block", block_length=15
+    )
+
+    iid_ac = _mean_lag1_autocorr(iid_matrix)
+    block_ac = _mean_lag1_autocorr(block_matrix)
+
+    # iid scrambling leaves no measurable structure
+    assert abs(iid_ac) < 0.1
+    # block paths retain most of the pool's phi=0.9 dependence (join points dilute it slightly)
+    assert block_ac > 0.5
+    assert block_ac > iid_ac + 0.4
