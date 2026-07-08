@@ -43,6 +43,32 @@ def print_summary(final_returns: np.ndarray) -> None:
     print("=" * 35)
 
 
+def print_comparison(results: dict[str, np.ndarray]) -> None:
+    """Print expected return, volatility, Sharpe, and VaR side by side, one column per strategy."""
+    col_w = max(max(len(name) for name in results), 10) + 3
+
+    header = "  " + "Metric".ljust(18) + "".join(name.rjust(col_w) for name in results)
+    width = max(len(header) + 2, 35)
+
+    print("=" * width)
+    print("  Monte Carlo Strategy Comparison")
+    print("=" * width)
+    print(header)
+    for label, fn, as_pct in [
+        ("Expected Return", compute_expected_return, True),
+        ("Volatility", compute_volatility, True),
+        ("Sharpe Ratio", compute_sharpe, False),
+        ("VaR (95%)", compute_var, True),
+    ]:
+        cells = ""
+        for arr in results.values():
+            value = fn(arr)
+            cell = f"{value * 100:.2f}%" if as_pct else f"{value:.3f}"
+            cells += cell.rjust(col_w)
+        print("  " + label.ljust(18) + cells)
+    print("=" * width)
+
+
 def plot_return_distribution(final_returns: np.ndarray) -> None:
     """Plot a histogram of final returns with a VaR 95% line and save to outputs/return_distribution.png."""
     var = compute_var(final_returns)

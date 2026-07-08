@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.simulation.resampler import bootstrap_paths, compute_returns
+from src.simulation.resampler import bootstrap_paths, bootstrap_paths_multi, compute_returns
 
 
 def _make_prices() -> pd.DataFrame:
@@ -82,3 +82,34 @@ def test_block_bootstrap_preserves_autocorrelation():
     # block paths retain most of the pool's phi=0.9 dependence (join points dilute it slightly)
     assert block_ac > 0.5
     assert block_ac > iid_ac + 0.4
+
+
+def test_multi_bootstrap_shape():
+    rng = np.random.default_rng(1)
+    panel = pd.DataFrame(rng.normal(0, 0.01, size=(500, 7)))
+
+    tensor = bootstrap_paths_multi(panel, n_sims=50, n_days=60, block_length=15)
+
+    assert tensor.shape == (50, 60, 7)
+    assert not np.isnan(tensor).any()
+    # every ticker of every path must open at exactly $100
+    assert (tensor[:, 0, :] == 100.0).all()
+
+
+def test_multi_bootstrap_shared_dates_invariant():
+    # sentinel returns: date d, ticker k → 1e-6·d + 1e-3·k, so every cell decodes back to its date
+    n_dates, n_tickers = 100, 7
+    d = np.arange(n_dates)[:, None]
+    k = np.arange(n_tickers)[None, :]
+    panel = pd.DataFrame(1e-6 * d + 1e-3 * k)
+
+    tensor = bootstrap_paths_multi(panel, n_sims=20, n_days=60, block_length=15)
+
+    # recover sampled returns from prices, strip the ticker offset, decode the historical date
+    recovered = tensor[:, 1:, :] / tensor[:, :-1, :] - 1
+    decoded = (recovered - 1e-3 * np.arange(n_tickers)) / 1e-6
+    dates = np.rint(decoded)
+
+    assert np.allclose(decoded, dates, atol=1e-3)
+    # design invariant: all 7 tickers on simulation i, day t come from the SAME original date
+    assert (dates == dates[:, :, :1]).all()
